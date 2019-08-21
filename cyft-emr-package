@@ -77,21 +77,23 @@ fi
 if [[ $no_pkg = false ]]; then
   export MAVEN_OPTS="-Xmx512m"
   ./dev/change_scala_version.sh 2.11
-  mvn package -Phadoop2 -Pspark-2.4 -Pspark-scala-2.12 -DskipTests -Pbuild-distr \
-    -pl '!pig,!flink,!ignite,!kylin,!lens,!cassandra,!bigquery,!alluxio,!scio,!neo4j,!sap,!beam,!hazelcastjet,!geode'
+  mvn package -Phadoop2 -Pspark-2.4 -Pscala-2.11 -DskipTests -Pbuild-distr \
+    -pl '!pig,!flink,!ignite,!kylin,!lens,!cassandra,!bigquery,!alluxio,!scio,!neo4j,!sap'
 fi
 
 zep_version=$(xmllint --xpath "/*[local-name()='project']/*[local-name()='version']/text()" pom.xml)
 build_sha=$(git log -n1 --format=%H)
 
 if [[ $no_update = false ]]; then
-  aws s3 \
-    cp zeppelin-distribution/target/zeppelin-${zep_version}.tar.gz \
-    s3://cyft-ops-775197587106-us-east-1/mirror/zeppelin-${zep_version}-${build_sha}.tar.gz
+#  aws s3 \
+#    cp zeppelin-distribution/target/zeppelin-${zep_version}.tar.gz \
+#    s3://cyft-ops-775197587106-us-east-1/mirror/zeppelin-${zep_version}-${build_sha}.tar.gz
 
   echo "Updating ${zep_boot_file}..."
   echo "Using version ${zep_version}-${build_sha}"
   sed -e "s/^readonly ZEPPELIN_BUILD='([a-fA-F0-9]\+)'$/readonly ZEPPELIN_BUILD='${build_sha}'/" \
-    -e "s/readonly ZEPPELIN_VERSION='[A-Z0-9.-]\+'$/readonly ZEPPELIN_VERSION='${zep_version}'/" \
-    "$zep_boot_file" > "$zep_boot_file"
+    -e "s/^readonly ZEPPELIN_VERSION='[A-Z0-9.-]\+'$/readonly ZEPPELIN_VERSION='${zep_version}'/" \
+    "$zep_boot_file" > zeppelin-bootstrap-updated
+  chmod 755 zeppelin-bootstrap-updated
+  cp -i zeppelin-bootstrap-updated "$zep_boot_file"
 fi
