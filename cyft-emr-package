@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -o errexit
+set -o pipefail
+set -u
+
+readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source ${SCRIPT_DIR}/../all-the-things/bin/cyft.sh
+
+display_usage() {
+  cat <<EOM
+    ##### cyft-emr-package #####
+    Build Zeppelin for use as custom EMR build.
+
+    Optional arguments:
+        --no-package            Skip building distribution.
+        --no-update             Skip uploading package to mirror and update zeppelin-bootstrap.
+                                Update requires DeploymentRole.
+        -p | --profile          AWS profile name (defaults to none)
+        -r | --region           AWS region (defaults to us-east-1)
+        -h | --help             Show this message
+
+    Requirements:
+        aws: For uploading package to S3.
+        xmllint: To read pom.xml.
+                 For debian-based systems this is available in libxml2-utils.
+EOM
+
+  exit 2
+}
+
+readonly zep_boot_file="${SCRIPT_DIR}/../all-the-things/emr/files/zeppelin/zeppelin-bootstrap"
+
+aws_profile=''
+aws_region='us-east-1'
+no_pkg=false
+no_update=false
+
+while [[ $# > 0 ]]; do
+  key="$1"
+
+  case ${key} in
+    --no-package)
+      no_pkg=true
+      ;;
+    --no-update)
+      no_update=true
+      ;;
+    -p|--profile)
+      aws_profile="--profile $2"
+      shift
+      ;;
+    -r|--region)
+      aws_region="$2"
+      shift
+      ;;
+    -h|--help)
+      display_usage
+      exit 0
+      ;;
+    *)
+      display_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+require xmllint
+
+aws_setup
+
+if [[ $no_pkg = true ]] && [[ $no_update = true ]]; then
+  echo "Using both --no-package and --no-update seems rather pointless"
+  exit 1
+fi
+
+if [[ $no_pkg = false ]]; then
+  export MAVEN_OPTS="-Xmx512m"
+  ./dev/change_scala_version.sh 2.11
+  mvn package -Phadoop2 -Pspark-2.4 -Pspark-scala-2.12 -DskipTests -Pbuild-distr \
+    -pl '!pig,!flink,!ignite,!kylin,!lens,!cassandra,!bigquery,!alluxio,!scio,!neo4j,!sap,!beam,!hazelcastjet,!geode'
+fi
+
+zep_version=$(xmllint --xpath "/*[local-name()='project']/*[local-name()='version']/text()" pom.xml)
+build_sha=$(git log -n1 --format=%H)
+
+if [[ $no_update = false ]]; then
+  aws s3 \
+    cp zeppelin-distribution/target/zeppelin-${zep_version}.tar.gz \
+    s3://cyft-ops-775197587106-us-east-1/mirror/zeppelin-${zep_version}-${build_sha}.tar.gz
+
+  echo "Updating ${zep_boot_file}..."
+  echo "Using version ${zep_version}-${build_sha}"
+  sed -e "s/^readonly ZEPPELIN_BUILD='([a-fA-F0-9]\+)'$/readonly ZEPPELIN_BUILD='${build_sha}'/" \
+    -e "s/readonly ZEPPELIN_VERSION='[A-Z0-9.-]\+'$/readonly ZEPPELIN_VERSION='${zep_version}'/" \
+    "$zep_boot_file" > "$zep_boot_file"
+fi
