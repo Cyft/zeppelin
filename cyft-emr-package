@@ -85,15 +85,16 @@ zep_version=$(xmllint --xpath "/*[local-name()='project']/*[local-name()='versio
 build_sha=$(git log -n1 --format=%H)
 
 if [[ $no_update = false ]]; then
-#  aws s3 \
-#    cp zeppelin-distribution/target/zeppelin-${zep_version}.tar.gz \
-#    s3://cyft-ops-775197587106-us-east-1/mirror/zeppelin-${zep_version}-${build_sha}.tar.gz
+  aws s3 \
+    cp zeppelin-distribution/target/zeppelin-${zep_version}.tar.gz \
+    s3://cyft-ops-775197587106-us-east-1/mirror/zeppelin-${zep_version}-${build_sha}.tar.gz
 
   echo "Updating ${zep_boot_file}..."
   echo "Using version ${zep_version}-${build_sha}"
-  sed -e "s/^readonly ZEPPELIN_BUILD='([a-fA-F0-9]\+)'$/readonly ZEPPELIN_BUILD='${build_sha}'/" \
+  sed -e "s/^readonly ZEPPELIN_BUILD='[a-fA-F0-9]\+'$/readonly ZEPPELIN_BUILD='${build_sha}'/" \
     -e "s/^readonly ZEPPELIN_VERSION='[A-Z0-9.-]\+'$/readonly ZEPPELIN_VERSION='${zep_version}'/" \
     "$zep_boot_file" > zeppelin-bootstrap-updated
   chmod 755 zeppelin-bootstrap-updated
   cp -i zeppelin-bootstrap-updated "$zep_boot_file"
+  rm -i zeppelin-bootstrap-updated
 fi
