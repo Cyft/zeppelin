@@ -59,8 +59,9 @@ public class PythonUtils {
       });
       if (py4j.length == 0) {
         throw new RuntimeException("No py4j files found under " + sparkHome + "/python/lib");
-      } else if (py4j.length > 1) {
-        throw new RuntimeException("Multiple py4j files found under " + sparkHome + "/python/lib");
+      // EMR inserted symlink breaks this but doesn't cause issues for running
+      // } else if (py4j.length > 1) {
+      //   throw new RuntimeException("Multiple py4j files found under " + sparkHome + "/python/lib");
       } else {
         pythonPath.add(py4j[0].getAbsolutePath());
       }
